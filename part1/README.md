@@ -314,6 +314,3 @@ This document provides a structured and complete overview of the HBnB system des
 * Developers can use it as a reference during implementation
 
 ---
-
-
-Скажи — и я доведу до идеального уровня 👍
