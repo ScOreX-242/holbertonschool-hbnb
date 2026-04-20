@@ -1,8 +1,7 @@
 # holbertonschool-hbnb
-# HBnB Evolution 🏨
 
 ## 📋 Project Overview
-HBnB Evolution is a complete conceptual and technical implementation of a vacation rental platform. This project focuses on building a robust, scalable, and maintainable system by applying software engineering best practices.
+HBnB is a complete conceptual and technical implementation of a vacation rental platform. This project focuses on building a robust, scalable, and maintainable system by applying software engineering best practices.
 
 ## 🏗️ Architecture & Design
 The application is designed using a **Layered Architecture** to ensure separation of concerns:
