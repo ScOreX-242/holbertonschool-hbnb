@@ -2,11 +2,17 @@
 
 # HBnB Technical Documentation
 
-This document outlines the architecture, internal logic, and data flow for the HBnB application. The system is designed as a simplified vacation rental platform, emphasizing clean separation of concerns and maintainability.
+This document outlines the architectural blueprint, core business logic, and data flow for the HBnB application. Designed as a scalable vacation rental platform, the system relies on strict separation of concerns to ensure that the codebase remains maintainable and extensible as new features are introduced.
 
 ## 1. High-Level Architecture
 
-The application is built on a standard 3-tier architecture pattern. To simplify interactions between the user-facing endpoints and the underlying logic, the Presentation Layer acts as a Facade. It receives HTTP requests and delegates the heavy lifting to the services, without exposing how the data is processed or stored.
+The application is structured around a **3-tier architecture**, effectively decoupling the user interface from data storage and processing. To manage complexity and prevent tight coupling between layers, the system implements the **Facade Design Pattern**.
+
+* **Presentation Layer (API):** Serves as the entry point for the client. Its sole responsibility is to handle HTTP requests, parse JSON payloads, and return appropriate HTTP responses. It contains no business rules.
+* **Business Logic Layer (Services & Models):** The "brain" of the application. It receives parsed data from the API through the Facade, enforces business rules (e.g., permissions, validation), and manipulates the domain models.
+* **Persistence Layer (Repositories):** An abstraction layer over the database. It isolates database-specific queries from the business logic, allowing the underlying storage mechanism to be changed without rewriting the core application.
+
+The Facade acts as a unified interface. The API does not need to know how the models interact; it simply calls a method like `createPlace()` on the Facade, which orchestrates the necessary internal operations.
 
 ```mermaid
 classDiagram
@@ -39,15 +45,20 @@ classDiagram
     }
 
     PresentationLayer ..> Facade : Uses
-    Facade --> BusinessLogicLayer : Handles logic
-    BusinessLogicLayer ..> PersistenceLayer : Database operations
+    Facade --> BusinessLogicLayer : Orchestrates logic
+    BusinessLogicLayer ..> PersistenceLayer : Requests data operations
 ```
 
-## 2. Business Logic Layer
+## 2. Business Logic Layer & Domain Models
 
-The core of the system revolves around four main entities. To avoid code duplication and ensure consistent auditing, all entities inherit from a single `BaseModel` that automatically handles unique identifiers (UUID4) and timestamps. 
+The domain model represents the real-world entities of the HBnB platform. 
 
-A `User` can own multiple `Places` and write `Reviews`. A `Place` acts as the central resource: it belongs to an owner, contains a list of `Amenities` (many-to-many relationship), and receives `Reviews` from different users.
+To enforce the **DRY (Don't Repeat Yourself)** principle and maintain consistent auditing, all core entities inherit from a single `BaseModel`. This base class automatically assigns a universally unique identifier (`UUID4`) upon creation and manages lifecycle timestamps (`created_at`, `updated_at`). Using UUIDs ensures distributed uniqueness and prevents ID collision across the database.
+
+**Entity Relationships:**
+* **User & Place (1-to-Many):** A User can own multiple Places. The `Place` class maintains an `owner_id` as a foreign key reference, ensuring data integrity.
+* **User, Place & Review:** The `Review` class acts as a transactional entity. It binds a `User` (the reviewer) to a `Place` (the subject), containing the rating and comment.
+* **Place & Amenity (Many-to-Many):** Since multiple places can share the same amenities (e.g., Wi-Fi, Pool), they are linked through a many-to-many association represented by the `Includes` relationship.
 
 ```mermaid
 classDiagram
@@ -108,10 +119,11 @@ classDiagram
 
 ## 3. API Interaction Flow
 
-The following sequence diagrams illustrate the step-by-step lifecycle of standard operations. In all cases, the API routes the payload to the appropriate Service class, which validates the business rules (e.g., verifying that a user exists before creating a place) before instructing the Database layer to persist the changes.
+The interaction between the client and the server follows a strict sequence. Direct communication between the API and the Database is prohibited. Instead, the Service layer acts as a middleman. 
+
+For instance, when a user attempts to create a listing or submit a review, the Service layer first validates the existence of the related entities (e.g., checking if the `owner_id` or `place_id` actually exists in the database) before executing the write operation. This prevents orphaned records and maintains database consistency.
 
 ### User Registration
-
 ```mermaid
 sequenceDiagram
     participant User
@@ -123,12 +135,11 @@ sequenceDiagram
     API->>UserService: validateUser(data)
     UserService->>Database: insertUser(user)
     Database-->>UserService: success
-    UserService-->>API: response
+    UserService-->>API: mapped response
     API-->>User: 201 Created
 ```
 
 ### Place Creation
-
 ```mermaid
 sequenceDiagram
     participant User
@@ -141,12 +152,11 @@ sequenceDiagram
     PlaceService->>Database: verifyUser(owner_id)
     PlaceService->>Database: insertPlace(place)
     Database-->>PlaceService: success
-    PlaceService-->>API: response
+    PlaceService-->>API: mapped response
     API-->>User: 201 Created
 ```
 
 ### Review Submission
-
 ```mermaid
 sequenceDiagram
     participant User
@@ -159,12 +169,11 @@ sequenceDiagram
     ReviewService->>Database: checkPlace(place_id)
     ReviewService->>Database: insertReview(review)
     Database-->>ReviewService: success
-    ReviewService-->>API: response
+    ReviewService-->>API: mapped response
     API-->>User: 201 Created
 ```
 
 ### Fetch Places
-
 ```mermaid
 sequenceDiagram
     participant User
@@ -172,10 +181,10 @@ sequenceDiagram
     participant PlaceService
     participant Database
 
-    User->>API: GET /places
+    User->>API: GET /places?limit=10
     API->>PlaceService: getPlaces(filters)
     PlaceService->>Database: queryPlaces()
-    Database-->>PlaceService: places list
-    PlaceService-->>API: data
+    Database-->>PlaceService: raw records
+    PlaceService-->>API: serialized JSON
     API-->>User: 200 OK
 ```
